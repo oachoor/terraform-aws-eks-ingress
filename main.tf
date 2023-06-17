@@ -1,31 +1,25 @@
-// 3nd step
 locals {
-  prefix = "rwdr"
+  prefix = "ice-kube"
   tags = {
-    Project     = "rwdr"
+    Project     = "ice-kube"
     Environment = "dev"
     Terraform   = "yes"
   }
+  cidr_subnets = cidrsubnets("10.0.0.0/16", 4, 4, 4, 4)
 }
 
 data "aws_region" "current" {}
 data "aws_availability_zones" "available" {}
 
-// HA?
-// database => RDS or container based?
-// auth: sts idrsa (IAM Role for SA: Service account) OR aws-authenticator?
-// multi-env ?
-
-// 1st step
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "5.0.0"
-  name    = "${local.prefix}-vpc"
 
+  name            = "${local.prefix}-vpc"
   cidr            = "10.0.0.0/16"
   azs             = slice(data.aws_availability_zones.available.names, 0, 2)
-  public_subnets  = ["10.0.0.0/24", "10.0.1.0/24"]
-  private_subnets = ["10.0.2.0/24", "10.0.3.0/24"]
+  private_subnets = slice(local.cidr_subnets, 0, 2)
+  public_subnets  = slice(local.cidr_subnets, 2, 4)
 
   // Internet Gateway (IGW) allows instances with public IPs to access the internet. 
   // NAT Gateway (NGW) allows instances with no public IPs to access the internet
@@ -47,7 +41,6 @@ module "vpc" {
   tags = local.tags
 }
 
-// 2nd step
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 19.15"
@@ -61,22 +54,22 @@ module "eks" {
   subnet_ids = module.vpc.private_subnets
 
   // EKS: self-managed, managed-node or fargate
-  /*
-  With a self-managed node there is a lot you are responsible for configuring. That includes installing the kubelet, container runtime, connecting to the cluster, autoscaling, networking, and more. Most EKS clusters do not need the level of customization that self-managed nodes provide.
-  ---
-  Managed node groups handle the lifecycle of each worker node for you. A managed node group will come with all the prerequisite software and permissions, connect itself to the cluster, and provide an easier experience for lifecycle actions like autoscaling and updates. In most cases managed node groups will reduce the operational overhead of self managing nodes and provide a much easier experience.
-  */
+  // With a self-managed node there is a lot you are responsible for configuring. 
+  // That includes installing the kubelet, container runtime, connecting to the cluster, autoscaling, networking, and more. Most EKS clusters do not need the level of customization that self-managed nodes provide.
+
+  // Managed node groups handle the lifecycle of each worker node for you. A managed node group will come with all the prerequisite software and permissions, connect itself to the cluster, and provide an easier experience for lifecycle actions like autoscaling and updates. 
+  // In most cases managed node groups will reduce the operational overhead of self managing nodes and provide a much easier experience.
 
   // pods per node calculator => https://docs.aws.amazon.com/eks/latest/userguide/choosing-instance-type.html 
   eks_managed_node_group_defaults = {
     use_custom_launch_template = false
 
-    ami_type  = "AL2_x86_64"
     disk_size = 30
+    ami_type  = "AL2_x86_64"
     instance_types = [
       "t3.medium", // ~17 pods
-      "t3.small", // ~11 pods
-      "t3.nano", // ~4 pods
+      "t3.small",  // ~11 pods
+      "t3.nano",   // ~4 pods
     ]
   }
 
@@ -94,7 +87,6 @@ module "eks" {
   tags = local.tags
 }
 
-// 6th step
 module "irsa_role" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "5.20.0"
@@ -112,7 +104,6 @@ module "irsa_role" {
   tags = local.tags
 }
 
-// 7th step
 resource "kubernetes_service_account" "this" {
   metadata {
     name      = "aws-load-balancer-controller"

@@ -1,4 +1,3 @@
-// 1st step
 terraform {
   required_providers {
     aws = {
@@ -18,12 +17,10 @@ terraform {
   required_version = "~> 1.4"
 }
 
-// 1st step
 provider "aws" {
   region = "eu-central-1"
 }
 
-// 8th step (Exec plugins)
 provider "kubernetes" {
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
@@ -35,7 +32,6 @@ provider "kubernetes" {
   }
 }
 
-// 9th step (copy from kubernetes)
 provider "helm" {
   kubernetes {
     host                   = module.eks.cluster_endpoint
